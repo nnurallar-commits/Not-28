@@ -67,5 +67,72 @@ function bind(){document.querySelectorAll('[data-person]').forEach(b=>b.onclick=
 function switchProfile(){localStorage.removeItem('not28-current');currentId=null;render()}
 function exportProfile(){const blob=new Blob([JSON.stringify(p(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`not28-${p().name.toLowerCase()}-yedek.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
-if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker-v4.js').catch(()=>{}));
+if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker-v5.js').catch(()=>{}));
 render();
+
+
+/* ===== v5 feature overrides ===== */
+function ensureProfileV5(pr){
+  if(!('photo' in pr)) pr.photo='';
+  if(!Array.isArray(pr.widgets)||!pr.widgets.length) pr.widgets=['cycle','period','ovulation'];
+  return pr;
+}
+data.profiles.forEach(ensureProfileV5); save();
+function avatarHtml(pr,cls='today-avatar'){return pr.photo?`<img class="${cls}" src="${pr.photo}" alt="${pr.name}">`:`<div class="${cls}">${(pr.name||'?')[0].toUpperCase()}</div>`}
+function widgetDefs(pr=p()){
+  const pred=prediction(pr),ov=ovPred(pr),st=cycleStats(pr),lp=lastPeriod(pr);
+  return {
+    cycle:{ico:'◌',title:pred?`${Math.max(1,pred.cycleDay)}. gün`:'—',sub:'döngü günü'},
+    period:{ico:'◉',title:pred?`${fmt(pred.periodStart)} – ${fmt(pred.periodEnd)}`:'—',sub:'olası sonraki regl'},
+    ovulation:{ico:'✦',title:ov?`${fmt(ov.start)} – ${fmt(ov.end)}`:'—',sub:'olası verimli dönem'},
+    average:{ico:'⌁',title:st.avg?`${st.avg} gün`:'—',sub:'ortalama döngü'},
+    last:{ico:'▦',title:lp?fmt(lp.start):'—',sub:'son regl başlangıcı'}
+  }
+}
+function home(){
+  const pr=ensureProfileV5(p()),lp=lastPeriod(pr),pred=prediction(pr),ov=ovPred(pr),st=cycleStats(pr),defs=widgetDefs(pr);
+  let warn='';if(lp&&diff(lp.start,today())>=90)warn=`<div class="warning" style="margin-top:12px"><b>90+ gündür kanama kaydı yok.</b><br><small>PCOS'ta uzun aralıklar görülebilir; bu durumda bir sağlık profesyoneliyle görüşmek iyi olur.</small></div>`;
+  const ws=(pr.widgets||[]).slice(0,3).map(k=>defs[k]).filter(Boolean);
+  return `<section class="today-card">${avatarHtml(pr)}<div><div class="eyebrow">bugün · ${pr.mode==='pcos'?'pcos modu':'kişisel döngü'}</div><h1>${pred?`döngünün ${Math.max(1,pred.cycleDay)}. günü`:'ilk kaydını ekle'}</h1><p>${lp?`son regl ${fmt(lp.start)}`:'tahmin için regl başlangıcı kaydet'}</p></div></section>${warn}
+  <div class="section-title"><h2>widgetlar</h2><small>profilde değiştirebilirsin</small></div><div class="widget-grid">${ws.map(w=>`<div class="mini-widget"><span class="w-ico">${w.ico}</span><strong>${w.title}</strong><small>${w.sub}</small></div>`).join('')}</div>
+  <div class="section-title"><h2>şu an</h2><small>tahmin, kesinlik değil</small></div><div class="grid-2"><div class="card"><div class="eyebrow">sonraki regl</div><h3>${pred?`${fmt(pred.periodStart)} – ${fmt(pred.periodEnd)}`:'henüz yok'}</h3><p style="color:var(--muted);margin-bottom:0">${pr.mode==='pcos'?'PCOS nedeniyle tek gün yerine olası pencere gösteriliyor.':'Geçmiş kayıtlarına göre olası pencere.'}</p></div><div class="card"><div class="eyebrow">ovulasyon</div><h3>${ov?`${fmt(ov.start)} – ${fmt(ov.end)}`:'henüz yok'}</h3><p style="color:var(--muted);margin-bottom:0">${pr.mode==='pcos'?'Düzensiz ovulasyonda tahmin daha belirsiz olabilir. Otomatik takip edilir.':'Olası verimli dönem.'}</p></div></div>
+  <div class="section-title"><h2>hızlı kayıt</h2><small>2 dokunuş</small></div><div class="quick"><button data-add="period"><span class="ico">◉</span>regl</button><button data-add="symptom"><span class="ico">✦</span>belirti</button></div><div class="section-title"><h2>son kayıtlar</h2><small>düzenle veya sil</small></div><div class="card">${recent()}</div>`
+}
+function allRecords(pr=p()){
+  return [
+    ...pr.periods.map(x=>({kind:'period',id:x.id,d:x.start,t:'regl',s:x.end?`${fmt(x.start)} → ${fmt(x.end)} · ${x.flow||''}`:`${fmt(x.start)} · ${x.flow||''}`})),
+    ...pr.symptoms.map(x=>({kind:'symptom',id:x.id,d:x.date,t:'belirti',s:[x.items?.join(', '),x.note].filter(Boolean).join(' · ')})),
+    ...pr.notes.map(x=>({kind:'note',id:x.id,d:x.date,t:'not',s:x.text}))
+  ].sort((a,b)=>b.d.localeCompare(a.d));
+}
+function recent(){const rows=allRecords().slice(0,8);return rows.length?`<div class="list">${rows.map(r=>`<div class="list-row"><div><b>${r.t}</b><small>${r.s}</small></div><div class="record-actions"><button data-edit-kind="${r.kind}" data-edit-id="${r.id}">düzenle</button><button class="del" data-delete-kind="${r.kind}" data-delete-id="${r.id}">sil</button></div></div>`).join('')}</div>`:`<div class="empty">henüz kayıt yok.</div>`}
+function recordBy(kind,id){const map={period:'periods',symptom:'symptoms',note:'notes'};const arr=p()[map[kind]]||[];return arr.find(x=>x.id===id)}
+function editEntry(kind,id){
+  const r=recordBy(kind,id);if(!r)return;
+  let body='';
+  if(kind==='period')body=`<div class="field"><label>başlangıç</label><input id="eStart" type="date" value="${r.start}"></div><div class="field"><label>bitiş</label><input id="eEnd" type="date" value="${r.end||''}"></div><div class="field"><label>yoğunluk</label><select id="eFlow">${['hafif','orta','yoğun'].map(x=>`<option ${r.flow===x?'selected':''}>${x}</option>`).join('')}</select></div>`;
+  if(kind==='symptom')body=`<div class="field"><label>tarih</label><input id="eDate" type="date" value="${r.date}"></div><div class="field"><label>belirtiler</label><div class="chips">${SYMPTOMS.map(x=>`<button class="chip ${r.items?.includes(x)?'on':''}" data-edit-sym="${x}">${x}</button>`).join('')}</div></div><div class="field"><label>not</label><textarea id="eNote">${r.note||''}</textarea></div>`;
+  if(kind==='note')body=`<div class="field"><label>tarih</label><input id="eDate" type="date" value="${r.date}"></div><div class="field"><label>not</label><textarea id="eText">${r.text||''}</textarea></div>`;
+  document.body.insertAdjacentHTML('beforeend',`<div class="modal-wrap" id="modalWrap"><section class="modal"><div class="modal-head"><h3>kaydı düzenle</h3><button class="icon-btn" id="closeModal">×</button></div>${body}<button class="soft-btn primary full" id="saveEdit">değişiklikleri kaydet</button></section></div>`);
+  closeModal.onclick=()=>modalWrap.remove();modalWrap.onclick=e=>{if(e.target===modalWrap)modalWrap.remove()};document.querySelectorAll('[data-edit-sym]').forEach(b=>b.onclick=e=>{e.preventDefault();b.classList.toggle('on')});
+  saveEdit.onclick=()=>{if(kind==='period'){r.start=eStart.value;r.end=eEnd.value;r.flow=eFlow.value}if(kind==='symptom'){r.date=eDate.value;r.items=[...document.querySelectorAll('[data-edit-sym].on')].map(x=>x.dataset.editSym);r.note=eNote.value.trim()}if(kind==='note'){r.date=eDate.value;r.text=eText.value.trim()}save();modalWrap.remove();toast('güncellendi');render()}
+}
+function deleteEntry(kind,id){if(!confirm('bu kaydı silmek istediğine emin misin?'))return;const map={period:'periods',symptom:'symptoms',note:'notes'};const key=map[kind];p()[key]=p()[key].filter(x=>x.id!==id);save();toast('silindi');render()}
+function profile(){
+  const pr=ensureProfileV5(p()),defs={cycle:'döngü günü',period:'sonraki regl',ovulation:'ovulasyon aralığı',average:'ortalama döngü',last:'son regl'};
+  return `<div class="section-title"><h2>${pr.name}</h2><small>profil ayarları</small></div><div class="card"><div class="profile-photo-row">${avatarHtml(pr,'profile-photo')}<div><b>profil fotoğrafı</b><small style="display:block;color:var(--muted);margin:3px 0 8px">cihazından fotoğraf seç</small><div class="profile-photo-actions"><label class="soft-btn" for="photoInput">${pr.photo?'değiştir':'fotoğraf ekle'}</label>${pr.photo?'<button class="soft-btn danger" id="removePhoto">kaldır</button>':''}<input class="photo-input" id="photoInput" type="file" accept="image/*"></div></div></div><div class="field"><label>ad</label><input id="profileName" value="${pr.name}" maxlength="20"></div><button class="soft-btn" id="saveName">adı kaydet</button><div class="field"><label>döngü tipi</label><select id="modeSelect"><option value="regular" ${pr.mode==='regular'?'selected':''}>genelde düzenli</option><option value="irregular" ${pr.mode==='irregular'?'selected':''}>düzensiz</option><option value="pcos" ${pr.mode==='pcos'?'selected':''}>PCOS nedeniyle düzensiz</option></select></div><div class="switch-row"><div><b>dark mode</b><small style="display:block;color:var(--muted)">seçtiğin pastelin gece hali</small></div><button class="switch ${pr.dark?'on':''}" id="darkToggle"><i></i></button></div></div>
+  <div class="section-title"><h2>bugün widgetları</h2><small>en fazla 3</small></div><div class="card"><div class="widget-picks">${Object.entries(defs).map(([k,n])=>`<label class="widget-pick"><span>${n}</span><input type="checkbox" data-widget="${k}" ${pr.widgets.includes(k)?'checked':''}></label>`).join('')}</div></div>
+  <div class="section-title"><h2>12 pastel tema</h2></div><div class="card"><div class="theme-grid">${Object.entries(THEMES).map(([k,t])=>{const sw=pr.dark?DARK_THEMES[k]:t;return `<button class="theme-swatch ${pr.theme===k?'on':''}" data-theme="${k}" aria-label="${t.name}" title="${t.name}" style="background:linear-gradient(145deg,${sw.bg},${sw.accent})"></button>`}).join('')}</div></div>
+  <div class="section-title"><h2>veriler</h2></div><div class="card"><div class="list-row"><div><b>yedek dışa aktar</b><small>bu profilin kayıtlarını JSON olarak indir</small></div><button class="soft-btn" id="exportBtn">indir</button></div><div class="list-row"><div><b>profil değiştir</b><small>aynı cihazdaki başka kişiye geç</small></div><button class="soft-btn" id="switch2">değiştir</button></div></div>
+  <div class="section-title"><h2>profil işlemleri</h2></div><div class="card danger-zone"><button class="danger-btn" id="deleteProfile">profili sil</button></div>`
+}
+async function setProfilePhoto(file){if(!file)return;const img=new Image();const url=URL.createObjectURL(file);img.onload=()=>{const c=document.createElement('canvas'),size=256;c.width=size;c.height=size;const scale=Math.max(size/img.width,size/img.height),w=img.width*scale,h=img.height*scale;c.getContext('2d').drawImage(img,(size-w)/2,(size-h)/2,w,h);p().photo=c.toDataURL('image/jpeg',.82);save();URL.revokeObjectURL(url);toast('fotoğraf güncellendi');render()};img.src=url}
+function deleteProfile(){if(data.profiles.length<=1)return toast('en az bir profil kalmalı');if(!confirm(`${p().name} profilini ve tüm kayıtlarını silmek istediğine emin misin?`))return;data.profiles=data.profiles.filter(x=>x.id!==currentId);save();localStorage.removeItem('not28-current');currentId=null;render()}
+function bind(){
+  document.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>{currentId=b.dataset.person;localStorage.setItem('not28-current',currentId);view='home';render()});
+  document.getElementById('newPerson')?.addEventListener('click',newPerson);document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>{view=b.dataset.view;render()});document.getElementById('addMain')?.addEventListener('click',()=>modal());document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>modal(b.dataset.add));document.getElementById('switchProfile')?.addEventListener('click',switchProfile);document.getElementById('switch2')?.addEventListener('click',switchProfile);document.getElementById('prevMonth')?.addEventListener('click',()=>{calOffset--;render()});document.getElementById('nextMonth')?.addEventListener('click',()=>{calOffset++;render()});document.querySelectorAll('[data-day]').forEach(b=>b.onclick=()=>modal('period',b.dataset.day));
+  document.querySelectorAll('[data-edit-kind]').forEach(b=>b.onclick=()=>editEntry(b.dataset.editKind,b.dataset.editId));document.querySelectorAll('[data-delete-kind]').forEach(b=>b.onclick=()=>deleteEntry(b.dataset.deleteKind,b.dataset.deleteId));
+  document.getElementById('modeSelect')?.addEventListener('change',e=>{p().mode=e.target.value;save();toast('döngü tipi güncellendi');render()});document.getElementById('darkToggle')?.addEventListener('click',()=>{p().dark=!p().dark;save();render()});document.querySelectorAll('[data-theme]').forEach(b=>b.onclick=()=>{p().theme=b.dataset.theme;save();render()});document.getElementById('exportBtn')?.addEventListener('click',exportProfile);
+  document.getElementById('photoInput')?.addEventListener('change',e=>setProfilePhoto(e.target.files?.[0]));document.getElementById('removePhoto')?.addEventListener('click',()=>{p().photo='';save();render()});document.getElementById('saveName')?.addEventListener('click',()=>{const n=document.getElementById('profileName').value.trim();if(!n)return toast('isim boş olamaz');p().name=n;save();toast('isim güncellendi');render()});document.getElementById('deleteProfile')?.addEventListener('click',deleteProfile);
+  document.querySelectorAll('[data-widget]').forEach(cb=>cb.addEventListener('change',e=>{let w=p().widgets||[];if(e.target.checked){if(w.length>=3){e.target.checked=false;return toast('en fazla 3 widget seçebilirsin')}w=[...w,e.target.dataset.widget]}else{w=w.filter(x=>x!==e.target.dataset.widget);if(!w.length){e.target.checked=true;return toast('en az 1 widget kalsın')}}p().widgets=w;save();render()}));
+}

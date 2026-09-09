@@ -1,14 +1,9 @@
-// Not 28 ortak veri bağlantısı
-// Firebase Console > Project settings > Your apps > Web app bölümündeki firebaseConfig nesnesini buraya yapıştır.
-// Mail girişi gerekmez. Firebase Authentication > Sign-in method > Anonymous etkin olmalı.
-window.NOT28_FIREBASE_CONFIG = null;
-/* örnek:
 window.NOT28_FIREBASE_CONFIG = {
-  apiKey: "...",
-  authDomain: "...firebaseapp.com",
-  projectId: "...",
-  storageBucket: "...firebasestorage.app",
-  messagingSenderId: "...",
-  appId: "..."
+  apiKey: "AIzaSyAe4S0gItO5F2pBi_Q_pbnSDXaH7TOingU",
+  authDomain: "not-28.firebaseapp.com",
+  projectId: "not-28",
+  storageBucket: "not-28.firebasestorage.app",
+  messagingSenderId: "544574760615",
+  appId: "1:544574760615:web:762568d3543d230a9e1d82",
+  measurementId: "G-L9DRT7CNZJ"
 };
-*/

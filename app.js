@@ -69,7 +69,7 @@ function bind(){document.querySelectorAll('[data-person]').forEach(b=>b.onclick=
 function switchProfile(){localStorage.removeItem('not28-current');currentId=null;render()}
 function exportProfile(){const blob=new Blob([JSON.stringify(p(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`not28-${p().name.toLowerCase()}-yedek.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1800)}
-if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker-v9.js').catch(()=>{}));
+if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker-v10.js').catch(()=>{}));
 window.addEventListener('not28-cloud-data',e=>{if(e.detail?.profiles){data=e.detail;data.profiles.forEach(ensureProfileV5);localStorage.setItem(LS,JSON.stringify(data));if(currentId&&!data.profiles.some(x=>x.id===currentId&&!x.archived)){currentId=null;localStorage.removeItem('not28-current')}render()}});
 render();
 
